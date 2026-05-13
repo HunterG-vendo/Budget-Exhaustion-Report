@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vendo | Out of Budget Report</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0a0c10;--surface:#111418;--surface2:#181c22;--border:#252b35;
+  --green:#00e5a0;--green-dim:rgba(0,229,160,0.12);
+  --red:#ff4d6a;--red-dim:rgba(255,77,106,0.12);
+  --amber:#ffb74d;--amber-dim:rgba(255,183,77,0.1);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,0.1);
+  --text:#e2e8f0;--muted:#64748b;
+  --mono:'DM Mono',monospace;--sans:'Syne',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:1000;opacity:0.4;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");}
+
+/* ── UPLOAD SCREEN ── */
+#upload-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:40px;
+  background:radial-gradient(ellipse at 50% 30%, rgba(255,77,106,0.07) 0%, transparent 60%);}
+.vendo-wordmark{font-family:var(--sans);font-size:36px;font-weight:800;color:#fff;letter-spacing:-1px;margin-bottom:20px;}
+.upload-eyebrow{font-family:var(--mono);font-size:11px;color:var(--red);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:8px;}
+.upload-title{font-size:32px;font-weight:800;color:#fff;letter-spacing:-1px;margin-bottom:10px;text-align:center;}
+.upload-sub{font-size:14px;color:var(--muted);margin-bottom:36px;text-align:center;max-width:460px;line-height:1.7;}
+
+/* Two upload zones side by side */
+.upload-zones{width:100%;max-width:680px;display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
+.upload-zone-wrap{display:flex;flex-direction:column;gap:0;}
+.upload-zone-label{font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.1em;
+  color:var(--muted);padding:10px 16px 10px;background:var(--surface);
+  border:1px dashed var(--border);border-bottom:none;border-radius:10px 10px 0 0;
+  display:flex;align-items:center;justify-content:space-between;}
+.upload-zone-label .zone-badge{font-size:9px;background:var(--red-dim);color:var(--red);border:1px solid rgba(255,77,106,0.3);border-radius:3px;padding:2px 7px;}
+.upload-zone-label .zone-badge.ready{background:var(--green-dim);color:var(--green);border-color:rgba(0,229,160,0.3);}
+.drop-zone{border:1px dashed var(--border);border-radius:0 0 10px 10px;padding:28px 20px;
+  display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;transition:all 0.2s;background:var(--surface);}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--red);background:rgba(255,77,106,0.04);}
+.drop-zone.loaded{border-color:var(--green);border-style:solid;background:var(--green-dim);}
+.drop-icon{font-size:28px;line-height:1;}
+.drop-label{font-size:13px;font-weight:700;color:var(--text);text-align:center;}
+.drop-hint{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;line-height:1.5;}
+.drop-zone.loaded .drop-label{color:var(--green);}
+.drop-zone.loaded .drop-hint{color:rgba(0,229,160,0.7);}
+.choose-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:6px 16px;color:var(--muted);
+  font-family:var(--mono);font-size:11px;cursor:pointer;transition:all 0.15s;}
+.choose-btn:hover{border-color:var(--red);color:var(--red);}
+.drop-zone.loaded .choose-btn{border-color:rgba(0,229,160,0.4);color:var(--green);}
+
+.start-btn{display:none;width:100%;max-width:680px;background:var(--red);color:#fff;border:none;border-radius:10px;
+  padding:16px 32px;font-family:var(--sans);font-size:15px;font-weight:800;cursor:pointer;
+  transition:all 0.2s;letter-spacing:0.02em;align-items:center;justify-content:center;gap:10px;margin-top:4px;}
+.start-btn.visible{display:flex;}
+.start-btn:hover{opacity:0.9;transform:translateY(-1px);box-shadow:0 6px 24px rgba(255,77,106,0.3);}
+.upload-footnote{margin-top:20px;font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;line-height:1.8;max-width:500px;}
+.upload-footnote a{color:var(--red);text-decoration:none;}
+input[type=file]{display:none;}
+
+/* ── QUICK START POPOVER ── */
+.qs-trigger{position:fixed;bottom:28px;right:28px;width:44px;height:44px;border-radius:50%;
+  background:var(--red);border:none;color:#fff;font-size:18px;font-weight:800;
+  cursor:pointer;z-index:500;box-shadow:0 4px 20px rgba(255,77,106,0.4);
+  transition:all 0.2s;display:flex;align-items:center;justify-content:center;font-family:var(--sans);}
+.qs-trigger:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(255,77,106,0.55);}
+.qs-popover{position:fixed;bottom:84px;right:28px;width:310px;background:#1e2330;
+  border:1px solid #2e3545;border-radius:14px;padding:20px;z-index:501;
+  box-shadow:0 16px 48px rgba(0,0,0,0.5);opacity:0;pointer-events:none;
+  transform:translateY(10px);transition:all 0.2s;}
+.qs-popover.open{opacity:1;pointer-events:all;transform:translateY(0);}
+.qs-title{font-size:13px;font-weight:700;color:#fff;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;}
+.qs-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0;transition:color 0.15s;}
+.qs-close:hover{color:var(--text);}
+.qs-steps{display:flex;flex-direction:column;gap:12px;}
+.qs-step{display:flex;gap:10px;align-items:flex-start;}
+.qs-num{width:20px;height:20px;border-radius:50%;background:var(--red-dim);color:var(--red);
+  font-family:var(--mono);font-size:10px;font-weight:700;display:flex;align-items:center;
+  justify-content:center;flex-shrink:0;margin-top:2px;}
+.qs-step-text{font-size:12px;color:var(--muted);line-height:1.55;}
+.qs-step-text strong{color:var(--text);}
+.qs-step-text .path{font-family:var(--mono);font-size:10px;color:var(--blue);background:rgba(77,159,255,0.08);
+  padding:1px 5px;border-radius:3px;display:inline;}
+.qs-footer{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);
+  font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;}
+
+/* ── DASHBOARD ── */
+#dashboard{display:none;}
+header{padding:16px 36px;border-bottom:1px solid var(--border);display:flex;align-items:center;
+  justify-content:space-between;background:linear-gradient(180deg,rgba(255,77,106,0.04) 0%,transparent 100%);
+  position:sticky;top:0;z-index:100;backdrop-filter:blur(8px);}
+.header-brand{display:flex;align-items:center;gap:16px;}
+.header-wordmark{font-family:var(--sans);font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.5px;}
+.header-divider{width:1px;height:28px;background:var(--border);}
+.header-text{display:flex;flex-direction:column;gap:2px;}
+.eyebrow{font-family:var(--mono);font-size:10px;color:var(--red);letter-spacing:0.15em;text-transform:uppercase;}
+.header-title{font-size:15px;font-weight:700;color:#fff;letter-spacing:-0.3px;}
+.header-right{display:flex;align-items:center;gap:10px;}
+.date-range{font-family:var(--mono);font-size:11px;color:var(--muted);}
+.new-upload-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:7px 14px;
+  color:var(--muted);font-family:var(--mono);font-size:11px;cursor:pointer;transition:all 0.15s;}
+.new-upload-btn:hover{border-color:var(--red);color:var(--red);}
+
+/* TZ picker */
+.tz-picker{display:flex;gap:4px;align-items:center;}
+.tz-label{font-family:var(--mono);font-size:10px;color:var(--muted);margin-right:2px;text-transform:uppercase;letter-spacing:0.08em;}
+.tz-btn{font-family:var(--mono);font-size:10px;font-weight:500;padding:5px 10px;border-radius:5px;
+  border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;transition:all 0.15s;}
+.tz-btn:hover{border-color:var(--green);color:var(--text);}
+.tz-btn.active{background:var(--green-dim);border-color:var(--green);color:var(--green);}
+
+/* SUMMARY BAR */
+.summary-bar{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--border);}
+.sum-card{padding:18px 28px;border-right:1px solid var(--border);}
+.sum-card:last-child{border-right:none;}
+.sum-label{font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;}
+.sum-value{font-family:var(--mono);font-size:28px;font-weight:500;}
+.sum-value.red{color:var(--red);}
+.sum-value.amber{color:var(--amber);}
+.sum-sub{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:4px;}
+
+/* MAIN LAYOUT */
+.main{display:grid;grid-template-columns:280px 1fr;height:calc(100vh - 128px);}
+
+/* SIDEBAR */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;
+  height:100%;position:sticky;top:61px;align-self:start;max-height:calc(100vh - 128px);}
+.sidebar-header{padding:12px 18px;border-bottom:1px solid var(--border);font-family:var(--mono);
+  font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;
+  display:flex;justify-content:space-between;align-items:center;}
+.sidebar-count{color:var(--red);font-weight:500;}
+.campaign-item{padding:12px 18px;border-bottom:1px solid var(--border);cursor:pointer;
+  transition:background 0.12s;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start;}
+.campaign-item:hover{background:var(--surface2);}
+.campaign-item.active{background:rgba(255,77,106,0.06);border-left:2px solid var(--red);padding-left:16px;}
+.c-name{font-size:11px;font-weight:700;line-height:1.5;color:var(--text);}
+.c-portfolio{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px;}
+.c-badge{font-family:var(--mono);font-size:9px;font-weight:500;padding:3px 7px;border-radius:4px;
+  white-space:nowrap;margin-top:2px;letter-spacing:0.04em;}
+.badge-red{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,77,106,0.25);}
+.badge-amber{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(255,183,77,0.25);}
+.badge-green{background:var(--green-dim);color:var(--green);border:1px solid rgba(0,229,160,0.25);}
+
+/* DETAIL PANEL */
+.detail{padding:26px 34px;overflow-y:auto;}
+.detail-header{margin-bottom:22px;}
+.detail-campaign-name{font-size:17px;font-weight:800;letter-spacing:-0.3px;margin-bottom:7px;color:#fff;}
+.detail-meta{display:flex;gap:14px;align-items:center;flex-wrap:wrap;}
+.detail-meta-item{font-family:var(--mono);font-size:11px;color:var(--muted);}
+.detail-meta-sep{color:var(--border);}
+
+/* STAT STRIP */
+.stat-strip{display:flex;gap:0;margin-top:14px;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.stat-cell{flex:1;padding:10px 14px;border-right:1px solid var(--border);background:var(--surface2);}
+.stat-cell:last-child{border-right:none;}
+.stat-cell-label{font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;}
+.stat-cell-value{font-family:var(--mono);font-size:15px;font-weight:500;color:#fff;}
+.stat-cell-value.green{color:var(--green);}
+.stat-cell-value.red{color:var(--red);}
+.stat-cell-value.amber{color:var(--amber);}
+.stat-cell-sub{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:2px;}
+.section{margin-bottom:26px;}
+.section-title{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:0.12em;
+  color:var(--muted);margin-bottom:13px;display:flex;align-items:center;gap:10px;}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* CALENDAR */
+.oob-calendar{display:flex;gap:7px;flex-wrap:wrap;}
+.cal-day{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 14px;min-width:106px;}
+.cal-day.is-oob{border-color:rgba(255,77,106,0.5);background:var(--red-dim);}
+.cal-day.is-close{border-color:rgba(255,183,77,0.4);background:var(--amber-dim);}
+.cal-day-date{font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:5px;}
+.is-oob .cal-day-date{color:rgba(255,77,106,0.7);}
+.is-close .cal-day-date{color:rgba(255,183,77,0.7);}
+.cal-day-pct{font-family:var(--mono);font-size:21px;font-weight:500;}
+.is-oob .cal-day-pct{color:var(--red);}
+.is-close .cal-day-pct{color:var(--amber);}
+.cal-day-spend{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px;}
+.cal-day-status{font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:0.07em;margin-top:5px;}
+.is-oob .cal-day-status{color:var(--red);}
+.is-close .cal-day-status{color:var(--amber);}
+
+/* DATE TABS */
+.date-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:13px;}
+.date-tab{font-family:var(--mono);font-size:11px;padding:6px 14px;border-radius:6px;
+  border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;transition:all 0.15s;font-weight:500;}
+.date-tab:hover{border-color:var(--green);color:var(--text);}
+.date-tab.active{background:var(--green-dim);border-color:var(--green);color:var(--green);}
+.date-tab.avg-tab{border-color:rgba(245,200,66,0.4);color:#f5c842;}
+.date-tab.avg-tab.active{background:rgba(245,200,66,0.12);border-color:#f5c842;color:#f5c842;}
+.date-tab.oob-tab{border-color:rgba(255,77,106,0.4);color:var(--red);}
+.date-tab.oob-tab.active{background:var(--red-dim);border-color:var(--red);color:var(--red);}
+
+/* CHART */
+.chart-wrapper{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:20px;}
+.chart-legend-row{display:flex;gap:20px;margin-bottom:14px;font-family:var(--mono);font-size:11px;flex-wrap:wrap;}
+.legend-item{display:flex;align-items:center;gap:7px;color:var(--muted);}
+.legend-swatch{width:12px;height:12px;border-radius:2px;flex-shrink:0;}
+canvas{max-height:260px;}
+
+/* COLOR LEGEND */
+.color-legend{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.cl-item{display:flex;align-items:center;gap:7px;padding:6px 12px;background:var(--surface2);
+  border:1px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:10px;color:var(--muted);}
+.cl-swatch{width:14px;height:14px;border-radius:3px;flex-shrink:0;}
+.cl-item strong{color:var(--text);font-weight:500;}
+
+/* HEATMAP */
+.heatmap-scroll{overflow-x:auto;}
+.hour-grid{display:grid;grid-template-columns:52px repeat(24,1fr);gap:2px;min-width:660px;
+  font-family:var(--mono);font-size:10px;}
+.hour-label{color:var(--muted);text-align:right;padding-right:7px;line-height:28px;font-size:10px;}
+.hour-header{text-align:center;color:var(--muted);padding-bottom:5px;font-size:9px;}
+.hour-cell{height:28px;border-radius:2px;background:var(--surface2);position:relative;
+  cursor:default;transition:transform 0.1s;}
+.hour-cell:hover{transform:scale(1.15);z-index:10;}
+.hour-cell::after{display:none;}
+
+/* PLACEHOLDER */
+.placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;height:400px;color:var(--muted);gap:12px;}
+.placeholder-icon{font-size:44px;opacity:0.2;}
+
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+</style>
+</head>
+<body>
+
+<!-- ── UPLOAD SCREEN ── -->
+<div id="upload-screen">
+  <div class="vendo-wordmark">PLTFRM</div>
+  <p class="upload-eyebrow">Amazon Ads</p>
+  <h1 class="upload-title">Out of Budget Report</h1>
+  <p class="upload-sub">Upload your Sponsored Products Budget report and hourly Campaign report to see which campaigns are running out of budget and exactly when they stop serving.</p>
+
+  <div class="upload-zones">
+    <!-- Budget Report -->
+    <div class="upload-zone-wrap">
+      <div class="upload-zone-label">
+        SP Budget Report
+        <span class="zone-badge" id="badge-budget">Required</span>
+      </div>
+      <div class="drop-zone" id="dz-budget" onclick="document.getElementById('fi-budget').click()">
+        <div class="drop-label" id="dl-budget">Drop .csv here</div>
+        <div class="drop-hint" id="dh-budget">Report type: Budget<br>Period: Last 7 days · Daily</div>
+        <button class="choose-btn">Choose File</button>
+      </div>
+      <input type="file" id="fi-budget" accept=".csv">
+    </div>
+    <!-- Campaign Report -->
+    <div class="upload-zone-wrap">
+      <div class="upload-zone-label">
+        SP Campaign Report (Hourly)
+        <span class="zone-badge" id="badge-campaign">Required</span>
+      </div>
+      <div class="drop-zone" id="dz-campaign" onclick="document.getElementById('fi-campaign').click()">
+        <div class="drop-label" id="dl-campaign">Drop .csv here</div>
+        <div class="drop-hint" id="dh-campaign">Report type: Campaign<br>Period: Last 7 days · Hourly</div>
+        <button class="choose-btn">Choose File</button>
+      </div>
+      <input type="file" id="fi-campaign" accept=".csv">
+    </div>
+  </div>
+
+  <button class="start-btn" id="start-btn" onclick="loadData()">
+    Generate Report →
+  </button>
+
+  <p class="upload-footnote">
+    All processing happens in your browser — data never leaves your device.<br>
+    Need help pulling reports? Click the <strong style="color:var(--red)">?</strong> button below.
+  </p>
+</div>
+
+<!-- Quick Start Popover -->
+<button class="qs-trigger" onclick="toggleQS()">?</button>
+<div class="qs-popover" id="qs-popover">
+  <div class="qs-title">
+    Quick Start Guide
+    <button class="qs-close" onclick="toggleQS()">✕</button>
+  </div>
+  <div class="qs-steps">
+    <div class="qs-step">
+      <div class="qs-num">1</div>
+      <div class="qs-step-text"><strong>Pull the Budget Report</strong> — Campaign Manager → Reports → Sponsored Products → Report type: <span class="path">Budget</span> → Time unit: <span class="path">Daily</span> → Last 7 days → Download as .csv</div>
+    </div>
+    <div class="qs-step">
+      <div class="qs-num">2</div>
+      <div class="qs-step-text"><strong>Pull the Campaign Report</strong> — Same place → Report type: <span class="path">Campaign</span> → Time unit: <span class="path">Hourly</span> → Last 7 days → Download as .csv</div>
+    </div>
+    <div class="qs-step">
+      <div class="qs-num">3</div>
+      <div class="qs-step-text"><strong>Upload both files</strong> above and click Generate Report</div>
+    </div>
+    <div class="qs-step">
+      <div class="qs-num">4</div>
+      <div class="qs-step-text"><strong>Select your timezone</strong> in the top right — times in the report will adjust from Amazon's Pacific time to yours</div>
+    </div>
+    <div class="qs-step">
+      <div class="qs-num">5</div>
+      <div class="qs-step-text"><strong>Click any campaign</strong> on the left to see its hourly spend curve and heatmap — red bars = budget exhausted, amber = nearly there</div>
+    </div>
+  </div>
+  <div class="qs-footer">Campaigns flagged = spend ≥ 95% of daily budget</div>
+</div>
+
+<!-- ── DASHBOARD ── -->
+<div id="dashboard">
+  <header>
+    <div class="header-brand">
+      <div class="header-wordmark">PLTFRM</div>
+      <div class="header-divider"></div>
+      <div class="header-text">
+        <div class="eyebrow">⚠ Out of Budget</div>
+        <div class="header-title">Budget Exhaustion Report: Hourly</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="date-range" id="hdr-dates"></div>
+      <div class="tz-picker">
+        <span class="tz-label">TZ</span>
+        <button class="tz-btn active" onclick="setTZ('PST',this)">PST</button>
+        <button class="tz-btn" onclick="setTZ('CST',this)">CST</button>
+        <button class="tz-btn" id="tz-est" onclick="setTZ('EST',this)">EST</button>
+      </div>
+      <button class="new-upload-btn" onclick="resetToUpload()">↑ New Upload</button>
+    </div>
+  </header>
+
+  <div class="summary-bar" id="summary-bar"></div>
+
+  <div class="main">
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <span>Campaigns</span>
+        <span class="sidebar-count" id="sidebar-count"></span>
+      </div>
+      <div id="campaign-list"></div>
+    </div>
+    <div class="detail" id="detail-panel">
+      <div class="placeholder">
+        <div class="placeholder-icon">📊</div>
+        <div style="font-size:13px;">Select a campaign to view budget exhaustion details</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── EMBEDDED DATA (pre-loaded from your files) ──
+const PRELOADED = [];
+
+let CAMPAIGNS = [];
+let TZ_NAME = 'PST';
+const TZ_SHIFTS = {PST:0, CST:2, EST:3};
+let activeChart = null;
+let currentIdx = null;
+let currentDate = null;
+
+// ── UPLOAD SCREEN LOGIC ──
+let budgetCSV = null, campaignCSV = null;
+let budgetFileName = '', campaignFileName = '';
+
+function toggleQS(){
+  const p = document.getElementById('qs-popover');
+  p.classList.toggle('open');
+}
+
+function setupDrop(dzId, inputId, onLoad, labelId, hintId, badgeId){
+  const dz = document.getElementById(dzId);
+  const inp = document.getElementById(inputId);
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0]; if(f) readFile(f, onLoad, labelId, hintId, badgeId, dzId);
+  });
+  inp.addEventListener('change', () => {
+    const f = inp.files[0]; if(f) readFile(f, onLoad, labelId, hintId, badgeId, dzId);
+  });
+}
+
+function readFile(file, cb, labelId, hintId, badgeId, dzId){
+  const reader = new FileReader();
+  reader.onload = e => {
+    cb(e.target.result, file.name);
+    document.getElementById(labelId).textContent = file.name;
+    document.getElementById(hintId).textContent = '✓ File loaded';
+    const badge = document.getElementById(badgeId);
+    badge.textContent = 'Ready'; badge.classList.add('ready');
+    document.getElementById(dzId).classList.add('loaded');
+    checkBothLoaded();
+  };
+  reader.readAsText(file);
+}
+
+function checkBothLoaded(){
+  const btn = document.getElementById('start-btn');
+  if(budgetCSV && campaignCSV) btn.classList.add('visible');
+}
+
+setupDrop('dz-budget','fi-budget', (txt,name)=>{ budgetCSV=txt; budgetFileName=name; }, 'dl-budget','dh-budget','badge-budget');
+setupDrop('dz-campaign','fi-campaign', (txt,name)=>{ campaignCSV=txt; campaignFileName=name; }, 'dl-campaign','dh-campaign','badge-campaign');
+
+function loadData(){
+  if(!budgetCSV || !campaignCSV){ alert('Please upload both files.'); return; }
+  CAMPAIGNS = parseData(budgetCSV, campaignCSV);
+  if(CAMPAIGNS.length === 0){ alert('No out-of-budget campaigns found. Check that spend ≥ 95% of budget on at least one day.'); return; }
+  showDashboard();
+}
+
+// ── CSV PARSER ──
+function parseCSV(text){
+  const lines = text.trim().split(/\r?\n/);
+  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g,'').trim());
+  return lines.slice(1).map(line => {
+    const vals = []; let cur='', inQ=false;
+    for(let i=0;i<line.length;i++){
+      if(line[i]==='"') inQ=!inQ;
+      else if(line[i]===',' && !inQ){ vals.push(cur.trim()); cur=''; }
+      else cur+=line[i];
+    }
+    vals.push(cur.trim());
+    const obj={};
+    headers.forEach((h,i) => obj[h] = (vals[i]||'').replace(/^"|"$/g,'').trim());
+    return obj;
+  });
+}
+
+function parseData(budgetTxt, campaignTxt){
+  const budgetRows = parseCSV(budgetTxt);
+  const campaignRows = parseCSV(campaignTxt);
+
+  // Budget: find OOB campaigns (spend >= 95% of budget)
+  const budgetByName = {};
+  budgetRows.forEach(r => {
+    const name = r['Campaign Name'];
+    if(!name) return;
+    const budget = parseFloat((r['Budget Amount']||'').replace('$','')) || 0;
+    const spend = parseFloat((r['Spend']||'').replace('$','')) || 0;
+    const isOob = budget > 0 && spend >= budget * 0.95;
+    if(!budgetByName[name]) budgetByName[name] = {portfolio: r['Portfolio name']||'No Portfolio', days:[]};
+    budgetByName[name].days.push({
+      date: r['Date'], budget, spend,
+      is_oob: isOob,
+      pct_used: budget > 0 ? Math.round(spend/budget*1000)/10 : 0
+    });
+  });
+
+  const oobCampaigns = Object.entries(budgetByName).filter(([,v]) => v.days.some(d=>d.is_oob));
+
+  // Hourly: group by campaign → date → hour
+  const hourlyByName = {};
+  campaignRows.forEach(r => {
+    const name = r['Campaign Name'];
+    const date = r['Start Date'];
+    const hour = parseInt((r['Start Time']||'0').split(':')[0]);
+    const spend = parseFloat((r['Spend']||'').replace('$','').replace(',','')) || 0;
+    const budget = parseFloat((r['Budget Amount']||'').replace('$','')) || 0;
+    if(!name||!date) return;
+    if(!hourlyByName[name]) hourlyByName[name]={};
+    if(!hourlyByName[name][date]) hourlyByName[name][date]={budget, hours:[]};
+    hourlyByName[name][date].hours.push({hour, spend});
+  });
+
+  // Build cumulative for each day
+  Object.values(hourlyByName).forEach(byDate => {
+    Object.values(byDate).forEach(day => {
+      day.hours.sort((a,b)=>a.hour-b.hour);
+      let cum = 0;
+      day.hours.forEach(h => { cum += h.spend; h.cumulative = Math.round(cum*100)/100; });
+    });
+  });
+
+  return oobCampaigns.map(([name, info]) => {
+    const oobDays = info.days.filter(d=>d.is_oob);
+    const allDays = info.days;
+    const dp = hourlyByName[name] || {};
+    return {
+      name, portfolio: info.portfolio,
+      budget: allDays[0]?.budget || 0,
+      oob_count: oobDays.length,
+      total_days: allDays.length,
+      oob_days: oobDays,
+      all_days: allDays,
+      daily_patterns: dp
+    };
+  }).sort((a,b) => b.oob_count - a.oob_count);
+}
+
+// On page load — use preloaded data
+function initPreloaded(){
+  if(PRELOADED && PRELOADED.length > 0){
+    CAMPAIGNS = PRELOADED;
+    showDashboard();
+  }
+  // else stay on upload screen
+}
+
+function showDashboard(){
+  document.getElementById('upload-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  buildSummary();
+  buildSidebar();
+  selectCampaign(0);
+}
+
+function resetToUpload(){
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('upload-screen').style.display = 'flex';
+  CAMPAIGNS=[]; budgetCSV=null; campaignCSV=null;
+  document.getElementById('start-btn').classList.remove('visible');
+}
+
+// ── SUMMARY ──
+function buildSummary(){
+  const severe = CAMPAIGNS.filter(c=>c.oob_count===7).length;
+  const chronic = CAMPAIGNS.filter(c=>c.oob_count>=5).length;
+  const totalBudget = CAMPAIGNS.reduce((s,c)=>s+c.budget,0);
+  const allDates = [...new Set(CAMPAIGNS.flatMap(c=>c.all_days.map(d=>d.date)))].sort();
+  if(allDates.length >= 2) document.getElementById('hdr-dates').textContent = allDates[0].replace(', 2026','') + ' – ' + allDates[allDates.length-1].replace(', 2026','');
+  document.getElementById('sidebar-count').textContent = CAMPAIGNS.length + ' OOB';
+  document.getElementById('summary-bar').innerHTML = `
+    <div class="sum-card"><div class="sum-label">Total Campaigns Hitting Budget</div><div class="sum-value red">${CAMPAIGNS.length}</div><div class="sum-sub">of all active SP campaigns</div></div>
+    <div class="sum-card"><div class="sum-label">Hit Budget Every Day</div><div class="sum-value red">${severe}</div><div class="sum-sub">campaigns — 7 of 7 days</div></div>
+    <div class="sum-card"><div class="sum-label">Hit Budget 5+ Days</div><div class="sum-value amber">${chronic}</div><div class="sum-sub">campaigns need budget increase</div></div>`;
+}
+
+// ── SIDEBAR ──
+function buildSidebar(){
+  document.getElementById('campaign-list').innerHTML = CAMPAIGNS.map((c,i) => {
+    const sev = c.oob_count===7?'red':c.oob_count>=4?'amber':'green';
+    const lbl = c.oob_count===7?'every day':`${c.oob_count}/7 days`;
+    const short = c.name.replace('PLTFRM | ','').replace(/ \| SP$/,'').replace(/ \| NB/,'').replace(/ \| B/,'');
+    return `<div class="campaign-item" onclick="selectCampaign(${i})" id="ci-${i}">
+      <div><div class="c-name">${short}</div><div class="c-portfolio">${c.portfolio}</div></div>
+      <div><span class="c-badge badge-${sev}">${lbl}</span></div>
+    </div>`;
+  }).join('');
+}
+
+// ── TZ ──
+function setTZ(name, btn){
+  TZ_NAME = name;
+  document.querySelectorAll('.tz-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(currentIdx !== null) renderDetail(CAMPAIGNS[currentIdx], true);
+}
+function shiftHour(h){ return (h + TZ_SHIFTS[TZ_NAME]) % 24; }
+function fmtHour(h){
+  const s = shiftHour(h); const ampm = s<12?'AM':'PM';
+  const d = s%12===0?12:s%12; return `${d}${ampm}`;
+}
+function fmtHourFull(h){
+  const s=shiftHour(h); const ampm=s<12?'AM':'PM';
+  const d=s%12===0?12:s%12; return `${d}:00 ${ampm} ${TZ_NAME}`;
+}
+
+// ── SELECT ──
+function selectCampaign(idx){
+  document.querySelectorAll('.campaign-item').forEach(el=>el.classList.remove('active'));
+  document.getElementById('ci-'+idx).classList.add('active');
+  currentIdx = idx;
+  renderDetail(CAMPAIGNS[idx], false);
+}
+
+// ── DETAIL ──
+function renderDetail(c, preserveDate){
+  const panel = document.getElementById('detail-panel');
+  const oobDates = c.oob_days.map(d=>d.date);
+  const allDates = Object.keys(c.daily_patterns).sort();
+  const defaultDate = preserveDate && currentDate ? currentDate : (oobDates[oobDates.length-1]||allDates[allDates.length-1]);
+  currentDate = defaultDate;
+  const short = c.name.replace('PLTFRM | ','');
+
+  const st = c.stats || {};
+  const tibColor = st.avg_tib === 0 ? 'red' : st.avg_tib < 50 ? 'amber' : 'green';
+  const roasColor = st.roas >= 3 ? 'green' : st.roas >= 1 ? 'amber' : 'red';
+  const statStrip = `<div class="stat-strip">
+    <div class="stat-cell"><div class="stat-cell-label">Total Spend</div><div class="stat-cell-value">$${st.spend?.toFixed(2)||'—'}</div><div class="stat-cell-sub">7-day total</div></div>
+    <div class="stat-cell"><div class="stat-cell-label">CPC</div><div class="stat-cell-value">$${st.cpc?.toFixed(2)||'—'}</div><div class="stat-cell-sub">avg cost/click</div></div>
+    <div class="stat-cell"><div class="stat-cell-label">Sales</div><div class="stat-cell-value green">$${st.sales?.toFixed(2)||'—'}</div><div class="stat-cell-sub">7-day attributed</div></div>
+    <div class="stat-cell"><div class="stat-cell-label">ROAS</div><div class="stat-cell-value ${roasColor}">${st.roas?.toFixed(2)||'—'}x</div><div class="stat-cell-sub">return on ad spend</div></div>
+    <div class="stat-cell"><div class="stat-cell-label">Purchases</div><div class="stat-cell-value">${st.orders??'—'}</div><div class="stat-cell-sub">7-day orders</div></div>
+    <div class="stat-cell"><div class="stat-cell-label">Avg Time in Budget</div><div class="stat-cell-value ${tibColor}">${st.avg_tib??'—'}%</div><div class="stat-cell-sub">0% = ran out every day</div></div>
+  </div>`;
+
+  panel.innerHTML = `
+    <div class="detail-header">
+      <div class="detail-campaign-name">${short}</div>
+      <div class="detail-meta">
+        <span class="detail-meta-item">Portfolio: ${c.portfolio}</span>
+        <span class="detail-meta-sep">·</span>
+        <span class="detail-meta-item">Daily Budget: $${c.budget.toFixed(2)}</span>
+        <span class="detail-meta-sep">·</span>
+        <span class="detail-meta-item">OOB: ${c.oob_count}/${c.total_days} days</span>
+      </div>
+      ${statStrip}
+    </div>
+    <div class="section">
+      <div class="section-title">7-Day Budget Usage</div>
+      <div class="oob-calendar" id="oob-cal"></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Hourly Spend Curve — Select a Day</div>
+      <div class="date-tabs" id="date-tabs"></div>
+      <div class="chart-wrapper">
+        <div class="chart-legend-row">
+          <div class="legend-item"><div class="legend-swatch" style="background:linear-gradient(to right,#2ecc71,#f1c40f,#e67e22,#e74c3c)"></div>Bars — Hourly Spend</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#f5c842"></div>Line — Cumulative Spend</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:transparent;border:1.5px dashed var(--red)"></div>Daily Budget Ceiling</div>
+        </div>
+        <canvas id="hourly-chart"></canvas>
+      </div>
+      <div style="margin-top:10px;padding:11px 16px;background:rgba(245,200,66,0.06);border:1px solid rgba(245,200,66,0.2);border-radius:8px;font-family:var(--mono);font-size:11px;color:#b8a830;line-height:1.6;">
+        <strong style="color:#f5c842;">Goal:</strong> Keep this campaign in-budget until at least 8PM PST to capture evening shoppers. If it's exhausting budget early, <strong style="color:#f5c842;">increase the daily budget</strong> to extend reach, or <strong style="color:#f5c842;">decrease bids</strong> to spread spend more evenly across the day.
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">Spend Heatmap — Hour × Day</div>
+      <div class="color-legend">
+        <div class="cl-item"><div class="cl-swatch" style="background:#2ecc71"></div><strong>Green</strong> — Early spend, well within budget</div>
+        <div class="cl-item"><div class="cl-swatch" style="background:#f1c40f"></div><strong>Yellow</strong> — Mid-spend, ~50% of budget used</div>
+        <div class="cl-item"><div class="cl-swatch" style="background:#e67e22"></div><strong>Orange</strong> — Getting close, 75–90% used</div>
+        <div class="cl-item"><div class="cl-swatch" style="background:#e74c3c"></div><strong>Red</strong> — Budget exhausted, ads stopped serving</div>
+        <div class="cl-item"><div class="cl-swatch" style="background:var(--surface2);border:1px solid var(--border)"></div><strong>Empty</strong> — No spend that hour</div>
+      </div>
+      <div class="heatmap-scroll"><div id="heatmap-grid"></div></div>
+    </div>`;
+
+  // Calendar
+  const cal = document.getElementById('oob-cal');
+  c.all_days.forEach(d => {
+    const cls = d.is_oob?'is-oob':d.pct_used>=85?'is-close':'';
+    const status = d.is_oob?'Out of Budget':d.pct_used>=85?'Near Budget':'In Budget';
+    cal.innerHTML += `<div class="cal-day ${cls}">
+      <div class="cal-day-date">${d.date.replace(', 2026','')}</div>
+      <div class="cal-day-pct">${d.pct_used}%</div>
+      <div class="cal-day-spend">$${d.spend.toFixed(2)} / $${d.budget.toFixed(2)}</div>
+      <div class="cal-day-status">${status}</div>
+    </div>`;
+  });
+
+  // Date tabs — add AVG tab first
+  const tabs = document.getElementById('date-tabs');
+  tabs.innerHTML += `<div class="date-tab avg-tab" onclick="switchDay('__avg__',this)">Avg Day</div>`;
+  allDates.forEach(date => {
+    const isOob = oobDates.includes(date);
+    const active = date===defaultDate?'active':'';
+    const oobCls = isOob?'oob-tab':'';
+    const ind = isOob?'⚠ ':'';
+    tabs.innerHTML += `<div class="date-tab ${oobCls} ${active}" onclick="switchDay('${date}',this)">${ind}${date.replace(', 2026','')}</div>`;
+  });
+
+  renderHourlyChart(c, defaultDate);
+  renderHeatmap(c);
+}
+
+function switchDay(date, el){
+  document.querySelectorAll('.date-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  currentDate = date;
+  if(date === '__avg__') renderAvgChart(CAMPAIGNS[currentIdx]);
+  else renderHourlyChart(CAMPAIGNS[currentIdx], date);
+}
+
+// ── AVG CHART ──
+function renderAvgChart(c){
+  const patterns = c.daily_patterns;
+  const dates = Object.keys(patterns);
+  const budget = c.budget;
+  const hourTotals = {};
+  const hourCounts = {};
+  dates.forEach(date => {
+    patterns[date].hours.forEach(h => {
+      if(!hourTotals[h.hour]){ hourTotals[h.hour]=0; hourCounts[h.hour]=0; }
+      hourTotals[h.hour] += h.spend;
+      hourCounts[h.hour]++;
+    });
+  });
+  const maxH = Math.max(...Object.keys(hourTotals).map(Number));
+  const slots = [];
+  let cum = 0;
+  for(let h=0; h<=maxH; h++){
+    const avg = hourTotals[h] ? hourTotals[h]/hourCounts[h] : 0;
+    cum += avg;
+    slots.push({hour:h, spend:Math.round(avg*100)/100, cumulative:Math.round(cum*100)/100});
+  }
+
+  // Find the hour where cumulative first hits budget on average
+  const oobSlot = slots.find(s => s.cumulative >= budget);
+  const oobHourLabel = oobSlot ? fmtHour(oobSlot.hour) : null;
+
+  _drawChart(slots, budget, 'Avg across ' + dates.length + ' days', oobHourLabel);
+}
+
+// ── CHART ──
+function renderHourlyChart(c, date){
+  const pattern = c.daily_patterns[date];
+  if(!pattern){ if(activeChart){activeChart.destroy();activeChart=null;} return; }
+  const budget = pattern.budget || c.budget;
+  const hmap = {};
+  pattern.hours.forEach(h => hmap[h.hour] = h);
+  const maxH = pattern.hours.length>0 ? Math.max(...pattern.hours.map(h=>h.hour)) : 23;
+  const slots = [];
+  let runCum = 0;
+  for(let h=0; h<=maxH; h++){
+    if(hmap[h]){ slots.push(hmap[h]); runCum = hmap[h].cumulative; }
+    else slots.push({hour:h, spend:0, cumulative:runCum});
+  }
+  _drawChart(slots, budget, null, null);
+}
+
+function _drawChart(slots, budget, titleOverride, oobHourLabel){
+  const labels = slots.map(h=>fmtHour(h.hour));
+  const hourlySpend = slots.map(h=>h.spend);
+  const cumulative = slots.map(h=>h.cumulative);
+
+  if(activeChart){ activeChart.destroy(); activeChart=null; }
+  const ctx = document.getElementById('hourly-chart').getContext('2d');
+
+  // Custom plugin: draw vertical OOB marker line
+  const oobLinePlugin = oobHourLabel ? {
+    id: 'oobLine',
+    afterDraw(chart) {
+      const idx = chart.data.labels.indexOf(oobHourLabel);
+      if(idx < 0) return;
+      const meta = chart.getDatasetMeta(0);
+      if(!meta.data[idx]) return;
+      const x = meta.data[idx].x;
+      const {top, bottom} = chart.chartArea;
+      const c2 = chart.ctx;
+      c2.save();
+      c2.beginPath();
+      c2.moveTo(x, top);
+      c2.lineTo(x, bottom);
+      c2.strokeStyle = 'rgba(255,77,106,0.9)';
+      c2.lineWidth = 2;
+      c2.setLineDash([4,3]);
+      c2.stroke();
+      // Label - draw inside chart area at the top, not above it
+      c2.fillStyle = '#ff4d6a';
+      c2.font = '500 10px DM Mono, monospace';
+      c2.textAlign = 'center';
+      c2.fillText('Avg OOB', x, top + 14);
+      c2.restore();
+    }
+  } : null;
+
+  const plugins = oobLinePlugin ? [oobLinePlugin] : [];
+  activeChart = new Chart(ctx, {
+    type:'bar',
+    plugins,
+    data:{
+      labels,
+      datasets:[
+        {
+          label:'Hourly Spend',
+          data:hourlySpend,
+          backgroundColor: slots.map(h => heatColor(h.cumulative / budget)),
+          borderColor: slots.map(h => heatColor(h.cumulative / budget)),
+          borderWidth:1, yAxisID:'y'
+        },
+        {
+          label:'Cumulative Spend',
+          data:cumulative,
+          type:'line',
+          borderColor:'#f5c842',
+          backgroundColor:'transparent',
+          borderWidth:2.5,
+          pointRadius:4,
+          pointBackgroundColor:'#f5c842',
+          pointBorderColor:'transparent',
+          tension:0.3,
+          yAxisID:'y'
+        },
+        {
+          label:'Budget',
+          data:Array(labels.length).fill(budget),
+          type:'line',
+          borderColor:'rgba(255,77,106,0.45)',
+          backgroundColor:'transparent',
+          borderWidth:1.5,
+          borderDash:[6,4],
+          pointRadius:0,
+          yAxisID:'y'
+        }
+      ]
+    },
+    options:{
+      responsive:true,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'#181c22',borderColor:'#252b35',borderWidth:1,
+          titleColor:'#e2e8f0',bodyColor:'#64748b',
+          titleFont:{family:'DM Mono',size:11},bodyFont:{family:'DM Mono',size:11},
+          callbacks:{
+            title: items => titleOverride ? titleOverride : `${items[0].label} ${TZ_NAME}`,
+            label: item => {
+              if(item.datasetIndex===2) return `  Budget: $${budget.toFixed(2)}`;
+              if(item.datasetIndex===1){
+                const pct = Math.round(item.raw/budget*100);
+                return `  Cumulative: $${item.raw.toFixed(2)} (${pct}% of budget)`;
+              }
+              return `  Hourly spend: $${item.raw.toFixed(2)}`;
+            }
+          }
+        }
+      },
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,0.03)'},ticks:{color:'#64748b',font:{family:'DM Mono',size:10}}},
+        y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#64748b',font:{family:'DM Mono',size:10},callback:v=>'$'+v.toFixed(0)}}
+      }
+    }
+  });
+}
+
+// ── HEATMAP ──
+function heatColor(pct) {
+  // pct = cumulative/budget (0 to 1+)
+  // Green(0%) → Yellow(50%) → Orange(80%) → Red(100%+)
+  const p = Math.min(pct, 1);
+  let r, g, b;
+  if(p < 0.5){
+    // green → yellow
+    const t = p / 0.5;
+    r = Math.round(46 + t*(241-46));
+    g = Math.round(204 + t*(196-204));
+    b = Math.round(113 + t*(15-113));
+  } else if(p < 0.8){
+    // yellow → orange
+    const t = (p-0.5)/0.3;
+    r = Math.round(241 + t*(230-241));
+    g = Math.round(196 + t*(126-196));
+    b = Math.round(15 + t*(34-15));
+  } else {
+    // orange → red
+    const t = (p-0.8)/0.2;
+    r = Math.round(230 + t*(231-230));
+    g = Math.round(126 + t*(76-126));
+    b = Math.round(34 + t*(60-34));
+  }
+  return `rgba(${r},${g},${b},0.85)`;
+}
+
+function renderHeatmap(c){
+  const patterns = c.daily_patterns;
+  const dates = Object.keys(patterns).sort();
+  const budget = c.budget;
+
+  let html = '<div class="hour-grid">';
+  html += '<div class="hour-label"></div>';
+  for(let col=0; col<24; col++){
+    const s = col; const ampm = s<12?'A':'P'; const d = s%12===0?12:s%12;
+    html += `<div class="hour-header">${d}${ampm}</div>`;
+  }
+
+  dates.forEach(date => {
+    const hmap = {};
+    patterns[date].hours.forEach(h => hmap[h.hour]=h);
+    const short = date.replace(', 2026','').replace('May ','M');
+    html += `<div class="hour-label">${short}</div>`;
+    for(let col=0; col<24; col++){
+      const rawH = (col - TZ_SHIFTS[TZ_NAME] + 24) % 24;
+      const hd = hmap[rawH];
+      if(!hd || hd.spend===0){
+        html += `<div class="hour-cell" style="background:var(--surface2)" data-tip="${fmtHourFull(rawH)} · no spend"></div>`;
+      } else {
+        const pct = hd.cumulative / budget;
+        const color = heatColor(pct);
+        const pctLabel = Math.round(pct*100);
+        html += `<div class="hour-cell" style="background:${color}" data-tip="${fmtHourFull(rawH)} · $${hd.spend.toFixed(2)} spent · ${pctLabel}% of budget used"></div>`;
+      }
+    }
+  });
+  html += '</div>';
+  document.getElementById('heatmap-grid').innerHTML = html;
+}
+
+// ── HEATMAP TOOLTIP ──
+const hmTip = document.createElement('div');
+hmTip.id = 'hm-tip';
+hmTip.style.cssText = 'position:fixed;background:#1a1d24;border:1px solid #252b35;color:#e2e8f0;font-family:DM Mono,monospace;font-size:10px;padding:5px 10px;border-radius:5px;white-space:nowrap;pointer-events:none;z-index:9999;opacity:0;transition:opacity 0.12s;';
+document.body.appendChild(hmTip);
+
+document.addEventListener('mouseover', e => {
+  const cell = e.target.closest('.hour-cell');
+  if(cell && cell.dataset.tip){
+    hmTip.textContent = cell.dataset.tip;
+    hmTip.style.opacity = '1';
+  } else {
+    hmTip.style.opacity = '0';
+  }
+});
+document.addEventListener('mousemove', e => {
+  if(hmTip.style.opacity === '1'){
+    const x = e.clientX, y = e.clientY;
+    const tw = hmTip.offsetWidth, th = hmTip.offsetHeight;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const left = x + tw + 12 > vw ? x - tw - 8 : x + 12;
+    const top  = y + th + 12 > vh ? y - th - 8 : y + 12;
+    hmTip.style.left = left + 'px';
+    hmTip.style.top  = top  + 'px';
+  }
+});
+document.addEventListener('mousemove', e => {
+  if(!e.target.closest('.hour-cell')) hmTip.style.opacity = '0';
+});
+
+const verStamp = document.createElement('div');
+verStamp.textContent = 'v1.0';
+verStamp.style.cssText = 'position:fixed;bottom:10px;right:14px;font-family:DM Mono,monospace;font-size:10px;color:#2e3545;z-index:200;pointer-events:none;letter-spacing:0.05em;';
+document.body.appendChild(verStamp);
+// No preloaded data — user uploads their own files
+</script>
+</body>
+</html>
